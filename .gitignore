@@ -1,0 +1,7 @@
+airflow/*
+!airflow/dags
+
+__pycache__/
+stocks.sqlite
+venv
+.idea
