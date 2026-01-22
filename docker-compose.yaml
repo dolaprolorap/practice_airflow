@@ -1,0 +1,136 @@
+services:
+  airflow-db:
+    image: postgres:16.11-alpine3.23
+    container_name: airflow-db
+    environment:
+      POSTGRES_USER: ${AIRFLOW_DB_USER}
+      POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD}
+      POSTGRES_DB: ${AIRFLOW_DB_NAME}
+    ports:
+      - 127.0.0.1:5432:5432
+    volumes:
+      - airflow-db-data:/var/lib/postgresql/data
+
+  stocks-db:
+    image: postgres:16.11-alpine3.23
+    container_name: stocks-db
+    environment:
+      POSTGRES_USER: ${STOCKS_DB_USER}
+      POSTGRES_PASSWORD: ${STOCKS_DB_PASSWORD}
+      POSTGRES_DB: ${STOCKS_DB_NAME}
+    ports:
+      - 127.0.0.1:5431:5432
+    volumes:
+      - stocks-db-data:/var/lib/postgresql/data
+
+  airflow-init:
+    image: custom-airflow:1.0.0
+    container_name: airflow-init
+    user: "${AIRFLOW_UID:-50000}:${AIRFLOW_GID:-0}"
+    environment:
+      AIRFLOW__CORE__FERNET_KEY: "${AIRFLOW__CORE__FERNET_KEY}"
+      AIRFLOW__API_AUTH__JWT_SECRET: "${AIRFLOW__API_AUTH__JWT_SECRET}"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN:
+        postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@airflow-db/${AIRFLOW_DB_NAME}
+      AIRFLOW__CORE__AUTH_MANAGER: "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
+
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__LOGGING__LOGGING_LEVEL: "INFO"
+      AIRFLOW__CORE__EXECUTION_API_SERVER_URL: "http://airflow-api-server:8080/execution/"
+      AIRFLOW__WORKERS__EXECUTION_API_SERVER_URL: "http://airflow-api-server:8080/execution/"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+    command: [
+      "bash", "-c",
+      "airflow db migrate && airflow users create
+        --username ${AIRFLOW_USER_USERNAME}
+        --firstname ${AIRFLOW_USER_FIRSTNAME}
+        --lastname ${AIRFLOW_USER_LASTNAME}
+        --email ${AIRFLOW_USER_EMAIL}
+        --password ${AIRFLOW_USER_PASSWORD}
+        --role Admin"
+    ]
+
+  airflow-api-server:
+    image: custom-airflow:1.0.0
+    container_name: airflow-api-server
+    depends_on:
+      - airflow-init
+    user: "${AIRFLOW_UID:-50000}:${AIRFLOW_GID:-0}"
+    environment:
+      AIRFLOW__CORE__FERNET_KEY: "${AIRFLOW__CORE__FERNET_KEY}"
+      AIRFLOW__API_AUTH__JWT_SECRET: "${AIRFLOW__API_AUTH__JWT_SECRET}"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN:
+        postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@airflow-db/${AIRFLOW_DB_NAME}
+      AIRFLOW__CORE__AUTH_MANAGER: "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
+
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__LOGGING__LOGGING_LEVEL: "INFO"
+      AIRFLOW__CORE__EXECUTION_API_SERVER_URL: "http://airflow-api-server:8080/execution/"
+      AIRFLOW__WORKERS__EXECUTION_API_SERVER_URL: "http://airflow-api-server:8080/execution/"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+    ports:
+      - "8080:8080"
+    command: ["bash", "-c", "sleep 5 && airflow api-server"]
+
+  airflow-dag-processor:
+    image: custom-airflow:1.0.0
+    container_name: airflow-dag-processor
+    depends_on:
+      - airflow-init
+      - airflow-api-server
+    user: "${AIRFLOW_UID:-50000}:${AIRFLOW_GID:-0}"
+    environment:
+      AIRFLOW__CORE__FERNET_KEY: "${AIRFLOW__CORE__FERNET_KEY}"
+      AIRFLOW__API_AUTH__JWT_SECRET: "${AIRFLOW__API_AUTH__JWT_SECRET}"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN:
+        postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@airflow-db/${AIRFLOW_DB_NAME}
+      AIRFLOW__CORE__AUTH_MANAGER: "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
+
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__LOGGING__LOGGING_LEVEL: "INFO"
+      AIRFLOW__CORE__EXECUTION_API_SERVER_URL: "http://airflow-api-server:8080/execution/"
+      AIRFLOW__WORKERS__EXECUTION_API_SERVER_URL: "http://airflow-api-server:8080/execution/"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+    command: ["bash", "-c", "sleep 5 && airflow dag-processor"]
+
+  airflow-scheduler:
+    image: custom-airflow:1.0.0
+    container_name: airflow-scheduler
+    depends_on:
+      - airflow-init
+      - airflow-api-server
+      - airflow-dag-processor
+    user: "${AIRFLOW_UID:-50000}:${AIRFLOW_GID:-0}"
+    environment:
+      AIRFLOW__CORE__FERNET_KEY: "${AIRFLOW__CORE__FERNET_KEY}"
+      AIRFLOW__API_AUTH__JWT_SECRET: "${AIRFLOW__API_AUTH__JWT_SECRET}"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN:
+        postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@airflow-db/${AIRFLOW_DB_NAME}
+      AIRFLOW__CORE__AUTH_MANAGER: "airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
+
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__LOGGING__LOGGING_LEVEL: "INFO"
+      AIRFLOW__CORE__EXECUTION_API_SERVER_URL: "http://airflow-api-server:8080/execution/"
+      AIRFLOW__WORKERS__EXECUTION_API_SERVER_URL: "http://airflow-api-server:8080/execution/"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+    command: ["bash", "-c", "sleep 5 && airflow scheduler"]
+
+volumes:
+  airflow-db-data:
+  stocks-db-data:

@@ -5,3 +5,4 @@ __pycache__/
 stocks.sqlite
 venv
 .idea
+visualisation
