@@ -5,4 +5,8 @@ __pycache__/
 stocks.sqlite
 venv
 .idea
-visualisation
+airflow/dags/visualisation/*
+!airflow/dags/visualisation/.gitkeep
+airflow/dags/file_exchange_data/*
+!airflow/dags/file_exchange_data/.gitkeep
+Taskfile.yml
